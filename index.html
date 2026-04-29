@@ -195,6 +195,7 @@
       var options = [];
       var colors = ["#7f5539", "#d9a441", "#4b7baf", "#4f8a5b", "#7a4869", "#5e6b2f"];
       var segmentSize = 90;
+      var dotCount = 50;
       var canvas = document.getElementById("wheel");
       var drawButton = document.getElementById("drawButton");
       var result = document.getElementById("result");
@@ -213,6 +214,11 @@
       var velocitySamples = [];
       var inertiaVelocity = 0;
       var inertiaTimer = null;
+      var tickTimer = null;
+      var lastTickAngle = null;
+      var audioContext = null;
+      var audioUnlocked = false;
+      var noiseBuffer = null;
       var animationFrame =
         window.requestAnimationFrame ||
         window.webkitRequestAnimationFrame ||
@@ -236,6 +242,67 @@
 
       function getCurrentTime() {
         return new Date().getTime();
+      }
+
+      function ensureAudioContext() {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          return null;
+        }
+
+        if (!audioContext) {
+          try {
+            audioContext = new AudioContextClass();
+          } catch (error) {
+            audioContext = null;
+          }
+        }
+
+        return audioContext;
+      }
+
+      function ensureNoiseBuffer() {
+        var contextInstance = ensureAudioContext();
+        var bufferSize;
+        var buffer;
+        var data;
+        var i;
+
+        if (!contextInstance) {
+          return null;
+        }
+
+        if (noiseBuffer) {
+          return noiseBuffer;
+        }
+
+        try {
+          bufferSize = Math.max(1, Math.floor(contextInstance.sampleRate * 0.03));
+          buffer = contextInstance.createBuffer(1, bufferSize, contextInstance.sampleRate);
+          data = buffer.getChannelData(0);
+          for (i = 0; i < bufferSize; i += 1) {
+            data[i] = Math.random() * 2 - 1;
+          }
+          noiseBuffer = buffer;
+        } catch (error) {
+          noiseBuffer = null;
+        }
+
+        return noiseBuffer;
+      }
+
+      function unlockAudio() {
+        var contextInstance = ensureAudioContext();
+
+        if (!contextInstance || audioUnlocked) {
+          return;
+        }
+
+        if (contextInstance.resume) {
+          contextInstance.resume();
+        }
+
+        audioUnlocked = true;
       }
 
       function getPointFromEvent(event) {
@@ -309,6 +376,101 @@
 
       function getSectorIndexFromAngle(angle) {
         return getWrappedIndex(Math.floor(normalizeAngle(angle + segmentSize / 2) / segmentSize));
+      }
+
+      function getPointerDotAngle(rotationAngle) {
+        return normalizeAngle(360 - normalizeAngle(rotationAngle));
+      }
+
+      function playTickSound() {
+        var contextInstance = ensureAudioContext();
+        var buffer;
+        var source;
+        var filter;
+        var gain;
+        var now;
+
+        if (!contextInstance || !audioUnlocked) {
+          return;
+        }
+
+        if (contextInstance.state === "suspended" && contextInstance.resume) {
+          contextInstance.resume();
+        }
+
+        try {
+          buffer = ensureNoiseBuffer();
+          if (!buffer) {
+            return;
+          }
+
+          source = contextInstance.createBufferSource();
+          source.buffer = buffer;
+          filter = contextInstance.createBiquadFilter();
+          gain = contextInstance.createGain();
+          now = contextInstance.currentTime;
+
+          filter.type = "bandpass";
+          filter.frequency.setValueAtTime(1700, now);
+          filter.Q.setValueAtTime(1.4, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.linearRampToValueAtTime(0.09, now + 0.001);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028);
+
+          source.connect(filter);
+          filter.connect(gain);
+          gain.connect(contextInstance.destination);
+          source.start(now);
+          source.stop(now + 0.03);
+        } catch (error) {
+          return;
+        }
+      }
+
+      function stopTicking() {
+        if (tickTimer !== null) {
+          cancelAnimationFrameCompat(tickTimer);
+          tickTimer = null;
+        }
+        lastTickAngle = null;
+      }
+
+      function watchTicks() {
+        var dotSize = 360 / dotCount;
+        var pointerAngle = getPointerDotAngle(getRenderedWheelRotation());
+        var delta;
+        var crossedCount;
+        var i;
+
+        if (lastTickAngle === null) {
+          lastTickAngle = pointerAngle;
+        } else {
+          delta = getAngleDelta(pointerAngle, lastTickAngle);
+          crossedCount = Math.floor(Math.abs(delta) / dotSize);
+
+          if (crossedCount > 0) {
+            if (crossedCount > 6) {
+              crossedCount = 6;
+            }
+            for (i = 0; i < crossedCount; i += 1) {
+              playTickSound();
+            }
+            lastTickAngle = pointerAngle;
+          }
+        }
+
+        if (!isSpinning) {
+          stopTicking();
+          return;
+        }
+
+        tickTimer = animationFrame(watchTicks);
+      }
+
+      function startTicking() {
+        stopTicking();
+        lastTickAngle = getPointerDotAngle(getRenderedWheelRotation());
+        tickTimer = animationFrame(watchTicks);
       }
 
       function buildSpinTarget(requestedIndex, spinDirection) {
@@ -408,6 +570,18 @@
         context.strokeStyle = "#ffffff";
         context.stroke();
 
+        for (i = 0; i < dotCount; i += 1) {
+          var dotAngle = (-90 + (i * 360 / dotCount)) * Math.PI / 180;
+          var dotRadius = radius - 2;
+          var dotX = center + Math.cos(dotAngle) * dotRadius;
+          var dotY = center + Math.sin(dotAngle) * dotRadius;
+
+          context.beginPath();
+          context.arc(dotX, dotY, size <= 300 ? 3 : 4, 0, Math.PI * 2, false);
+          context.fillStyle = "#f6f0e8";
+          context.fill();
+        }
+
         context.beginPath();
         context.arc(center, center, 28, 0, Math.PI * 2, false);
         context.fillStyle = "#ecd2a1";
@@ -469,6 +643,42 @@
         canvas.style.transform = "rotate(" + angle + "deg)";
       }
 
+      function getRenderedWheelRotation() {
+        var computedStyle;
+        var transformValue;
+        var values;
+        var a;
+        var b;
+
+        if (window.getComputedStyle) {
+          computedStyle = window.getComputedStyle(canvas, null);
+          transformValue =
+            computedStyle.transform ||
+            computedStyle.webkitTransform ||
+            computedStyle.mozTransform ||
+            computedStyle.msTransform;
+        } else {
+          transformValue = canvas.style.transform || canvas.style.webkitTransform;
+        }
+
+        if (!transformValue || transformValue === "none") {
+          return currentRotation;
+        }
+
+        if (transformValue.indexOf("matrix(") === 0) {
+          values = transformValue.substring(7, transformValue.length - 1).split(",");
+          a = parseFloat(values[0]);
+          b = parseFloat(values[1]);
+          return Math.atan2(b, a) * 180 / Math.PI;
+        }
+
+        if (transformValue.indexOf("rotate(") === 0) {
+          return parseFloat(transformValue.substring(7, transformValue.length - 4)) || currentRotation;
+        }
+
+        return currentRotation;
+      }
+
       function stopInertia() {
         if (inertiaTimer !== null) {
           cancelAnimationFrameCompat(inertiaTimer);
@@ -501,6 +711,7 @@
         drawButton.disabled = true;
         setIncludeDisabled(true);
         result.innerHTML = "";
+        startTicking();
 
         spinTarget = buildSpinTarget(resultIndex, spinDirection);
         targetRotation = normalizeAngle(360 - spinTarget.targetAngle);
@@ -519,6 +730,7 @@
           drawButton.disabled = false;
           setIncludeDisabled(false);
           isSpinning = false;
+          stopTicking();
           if (doneCallback) {
             doneCallback();
           }
@@ -541,6 +753,8 @@
         if (event.preventDefault) {
           event.preventDefault();
         }
+
+        unlockAudio();
 
         isDragging = true;
         dragMoved = false;
@@ -682,6 +896,13 @@
         canvas.onmousedown = beginDrag;
         document.onmousemove = moveDrag;
         document.onmouseup = endDrag;
+      }
+
+      if (drawButton.addEventListener) {
+        drawButton.addEventListener("mousedown", unlockAudio, false);
+        drawButton.addEventListener("touchstart", unlockAudio, false);
+      } else {
+        drawButton.onmousedown = unlockAudio;
       }
 
       if (optionAot.addEventListener) {
