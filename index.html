@@ -205,6 +205,8 @@
       var currentRotation = 0;
       var isSpinning = false;
       var selectedIndex = null;
+      var aotToggleCount = 0;
+      var pendingAttackOnTitan = false;
       var isDragging = false;
       var dragMoved = false;
       var dragResultIndex = null;
@@ -473,7 +475,7 @@
         tickTimer = animationFrame(watchTicks);
       }
 
-      function buildSpinTarget(requestedIndex, spinDirection) {
+      function buildSpinTarget(requestedIndex, spinDirection, allowBypass) {
         var resolvedIndex = requestedIndex;
         var minAngle;
         var maxAngle;
@@ -483,7 +485,7 @@
         var landedIndex;
         var bypassBoundaryAngle;
 
-        if (isBypassOption(options[requestedIndex])) {
+        if (allowBypass && isBypassOption(options[requestedIndex])) {
           if (spinDirection < 0) {
             bypassBoundaryAngle = requestedIndex * segmentSize + segmentSize / 2;
             targetAngle = normalizeAngle(
@@ -700,7 +702,7 @@
         inertiaTimer = animationFrame(stepInertia);
       }
 
-      function spinToSector(resultIndex, turnCount, spinDirection, doneCallback) {
+      function spinToSector(resultIndex, turnCount, spinDirection, allowBypass, doneCallback) {
         var spinTarget;
         var targetRotation;
         var normalizedRotation;
@@ -713,7 +715,7 @@
         result.innerHTML = "";
         startTicking();
 
-        spinTarget = buildSpinTarget(resultIndex, spinDirection);
+        spinTarget = buildSpinTarget(resultIndex, spinDirection, allowBypass);
         targetRotation = normalizeAngle(360 - spinTarget.targetAngle);
         normalizedRotation = normalizeAngle(currentRotation);
         if (spinDirection < 0) {
@@ -812,6 +814,8 @@
         var deltaAngle;
         var deltaTime;
         var spinDirection;
+        var attackIndex;
+        var allowBypass = true;
 
         if (!isDragging) {
           return;
@@ -848,10 +852,20 @@
           velocity = 0.6;
         }
 
+        if (pendingAttackOnTitan && optionAot.checked) {
+          attackIndex = options.indexOf(SPECIAL_AOT);
+          if (attackIndex >= 0) {
+            dragResultIndex = attackIndex;
+            pendingAttackOnTitan = false;
+            allowBypass = false;
+          }
+        }
+
         spinToSector(
           dragResultIndex,
           1 + Math.floor(Math.abs(velocity) / 12),
           spinDirection,
+          allowBypass,
           function () {
             dragResultIndex = null;
           }
@@ -865,12 +879,19 @@
       drawButton.onclick = function () {
         var resultIndex;
         var availableIndexes = [];
+        var attackIndex;
+        var allowBypass = true;
         var i;
         if (isSpinning) {
           return;
         }
 
-        if (selectedIndex === null) {
+        if (pendingAttackOnTitan && optionAot.checked) {
+          attackIndex = options.indexOf(SPECIAL_AOT);
+          resultIndex = attackIndex >= 0 ? attackIndex : 0;
+          pendingAttackOnTitan = false;
+          allowBypass = false;
+        } else if (selectedIndex === null) {
           for (i = 0; i < options.length; i += 1) {
             if (!isBypassOption(options[i])) {
               availableIndexes.push(i);
@@ -881,7 +902,7 @@
           resultIndex = selectedIndex;
         }
         selectedIndex = null;
-        spinToSector(resultIndex, 5, 1);
+        spinToSector(resultIndex, 5, 1, allowBypass);
       };
 
       if (canvas.addEventListener) {
@@ -905,11 +926,20 @@
         drawButton.onmousedown = unlockAudio;
       }
 
+      function handleAotChange() {
+        aotToggleCount += 1;
+        if (aotToggleCount >= 5) {
+          pendingAttackOnTitan = true;
+          aotToggleCount = 0;
+        }
+        rebuildOptions();
+      }
+
       if (optionAot.addEventListener) {
-        optionAot.addEventListener("change", rebuildOptions, false);
+        optionAot.addEventListener("change", handleAotChange, false);
         optionWork.addEventListener("change", rebuildOptions, false);
       } else {
-        optionAot.onchange = rebuildOptions;
+        optionAot.onchange = handleAotChange;
         optionWork.onchange = rebuildOptions;
       }
 
