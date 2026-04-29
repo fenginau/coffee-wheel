@@ -56,6 +56,8 @@
       width: 340px;
       height: 340px;
       cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
       -webkit-transform: rotate(0deg);
       transform: rotate(0deg);
       -webkit-transition: -webkit-transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1);
@@ -65,7 +67,7 @@
     .draw-button {
       display: inline-block;
       width: 260px;
-      margin-top: 34px;
+      margin-top: 64px;
       padding: 18px 0;
       border: 0;
       border-radius: 12px;
@@ -133,6 +135,26 @@
       var currentRotation = 0;
       var isSpinning = false;
       var selectedIndex = null;
+      var isDragging = false;
+      var dragMoved = false;
+      var dragStartAngle = 0;
+      var dragStartRotation = 0;
+      var lastPointerAngle = 0;
+      var velocitySamples = [];
+      var inertiaVelocity = 0;
+      var inertiaTimer = null;
+      var animationFrame =
+        window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        function (callback) {
+          return window.setTimeout(function () {
+            callback(new Date().getTime());
+          }, 16);
+        };
+      var cancelAnimationFrameCompat =
+        window.cancelAnimationFrame ||
+        window.webkitCancelAnimationFrame ||
+        window.clearTimeout;
 
       function normalizeAngle(angle) {
         angle = angle % 360;
@@ -140,6 +162,48 @@
           angle += 360;
         }
         return angle;
+      }
+
+      function getCurrentTime() {
+        return new Date().getTime();
+      }
+
+      function getPointFromEvent(event) {
+        var point = event;
+        if (event.touches && event.touches.length) {
+          point = event.touches[0];
+        } else if (event.changedTouches && event.changedTouches.length) {
+          point = event.changedTouches[0];
+        }
+        return point;
+      }
+
+      function getPointerAngle(clientX, clientY) {
+        var rect = canvas.getBoundingClientRect();
+        var centerX = rect.left + rect.width / 2;
+        var centerY = rect.top + rect.height / 2;
+        return Math.atan2(clientY - centerY, clientX - centerX) * 180 / Math.PI + 90;
+      }
+
+      function getAngleDelta(currentAngle, previousAngle) {
+        var delta = currentAngle - previousAngle;
+        while (delta > 180) {
+          delta -= 360;
+        }
+        while (delta < -180) {
+          delta += 360;
+        }
+        return delta;
+      }
+
+      function setWheelTransition(enabled) {
+        if (enabled) {
+          canvas.style.webkitTransition = "-webkit-transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1)";
+          canvas.style.transition = "transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1)";
+        } else {
+          canvas.style.webkitTransition = "none";
+          canvas.style.transition = "none";
+        }
       }
 
       function resizeCanvas() {
@@ -253,16 +317,149 @@
         canvas.style.transform = "rotate(" + angle + "deg)";
       }
 
-      canvas.onclick = function (event) {
+      function stopInertia() {
+        if (inertiaTimer !== null) {
+          cancelAnimationFrameCompat(inertiaTimer);
+          inertiaTimer = null;
+        }
+        isSpinning = false;
+      }
+
+      function stepInertia() {
+        currentRotation += inertiaVelocity;
+        setWheelRotation(currentRotation);
+        inertiaVelocity = inertiaVelocity * 0.97;
+
+        if (inertiaVelocity > -0.08 && inertiaVelocity < 0.08) {
+          stopInertia();
+          return;
+        }
+
+        inertiaTimer = animationFrame(stepInertia);
+      }
+
+      function startInertia(initialVelocity) {
+        if (initialVelocity > 24) {
+          initialVelocity = 24;
+        } else if (initialVelocity < -24) {
+          initialVelocity = -24;
+        }
+
+        if (initialVelocity > -0.2 && initialVelocity < 0.2) {
+          return;
+        }
+
+        stopInertia();
+        setWheelTransition(false);
+        inertiaVelocity = initialVelocity;
+        isSpinning = true;
+        inertiaTimer = animationFrame(stepInertia);
+      }
+
+      function beginDrag(event) {
+        var point;
+
         if (isSpinning) {
           return;
         }
 
-        var index = getSectorIndexFromPoint(event.clientX, event.clientY);
-        if (index !== null) {
-          selectedIndex = index;
+        point = getPointFromEvent(event);
+        if (getSectorIndexFromPoint(point.clientX, point.clientY) === null) {
+          return;
         }
-      };
+
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+
+        isDragging = true;
+        dragMoved = false;
+        velocitySamples = [];
+        dragStartAngle = getPointerAngle(point.clientX, point.clientY);
+        dragStartRotation = currentRotation;
+        lastPointerAngle = dragStartAngle;
+        setWheelTransition(false);
+        stopInertia();
+      }
+
+      function moveDrag(event) {
+        var point;
+        var pointerAngle;
+        var angleDelta;
+        var now;
+
+        if (!isDragging) {
+          return;
+        }
+
+        point = getPointFromEvent(event);
+        pointerAngle = getPointerAngle(point.clientX, point.clientY);
+        angleDelta = getAngleDelta(pointerAngle, dragStartAngle);
+        currentRotation = dragStartRotation + angleDelta;
+        setWheelRotation(currentRotation);
+
+        now = getCurrentTime();
+        velocitySamples.push({
+          time: now,
+          angle: pointerAngle
+        });
+
+        while (velocitySamples.length > 6) {
+          velocitySamples.shift();
+        }
+
+        if (Math.abs(getAngleDelta(pointerAngle, lastPointerAngle)) > 1) {
+          dragMoved = true;
+        }
+
+        lastPointerAngle = pointerAngle;
+
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+      }
+
+      function endDrag(event) {
+        var point;
+        var index;
+        var velocity = 0;
+        var firstSample;
+        var lastSample;
+        var deltaAngle;
+        var deltaTime;
+
+        if (!isDragging) {
+          return;
+        }
+
+        isDragging = false;
+        point = getPointFromEvent(event);
+
+        if (!dragMoved) {
+          index = getSectorIndexFromPoint(point.clientX, point.clientY);
+          if (index !== null) {
+            selectedIndex = index;
+          }
+          return;
+        }
+
+        if (velocitySamples.length >= 2) {
+          firstSample = velocitySamples[0];
+          lastSample = velocitySamples[velocitySamples.length - 1];
+          deltaAngle = getAngleDelta(lastSample.angle, firstSample.angle);
+          deltaTime = lastSample.time - firstSample.time;
+
+          if (deltaTime > 0) {
+            velocity = deltaAngle / (deltaTime / 16);
+          }
+        }
+
+        startInertia(velocity);
+
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+      }
 
       drawButton.onclick = function () {
         var resultIndex;
@@ -278,6 +475,7 @@
           return;
         }
 
+        setWheelTransition(true);
         isSpinning = true;
         drawButton.disabled = true;
         result.innerHTML = "";
@@ -287,6 +485,7 @@
         } else {
           resultIndex = selectedIndex;
         }
+        selectedIndex = null;
 
         extraSpins = 5 * 360;
         minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
@@ -305,6 +504,20 @@
           isSpinning = false;
         }, 4800);
       };
+
+      if (canvas.addEventListener) {
+        canvas.addEventListener("mousedown", beginDrag, false);
+        canvas.addEventListener("touchstart", beginDrag, false);
+        document.addEventListener("mousemove", moveDrag, false);
+        document.addEventListener("touchmove", moveDrag, false);
+        document.addEventListener("mouseup", endDrag, false);
+        document.addEventListener("touchend", endDrag, false);
+        document.addEventListener("touchcancel", endDrag, false);
+      } else {
+        canvas.onmousedown = beginDrag;
+        document.onmousemove = moveDrag;
+        document.onmouseup = endDrag;
+      }
 
       resizeCanvas();
       setWheelRotation(0);
