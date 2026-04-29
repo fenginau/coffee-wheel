@@ -288,6 +288,11 @@
         drawWheel();
       }
 
+      function setIncludeDisabled(disabled) {
+        optionAot.disabled = disabled;
+        optionWork.disabled = disabled;
+      }
+
       function isBypassOption(optionName) {
         return optionName === SPECIAL_AOT || optionName === SPECIAL_WORK;
       }
@@ -494,6 +499,7 @@
         setWheelTransition(true);
         isSpinning = true;
         drawButton.disabled = true;
+        setIncludeDisabled(true);
         result.innerHTML = "";
 
         spinTarget = buildSpinTarget(resultIndex, spinDirection);
@@ -511,6 +517,7 @@
         window.setTimeout(function () {
           result.innerHTML = "Result: " + options[spinTarget.resultIndex];
           drawButton.disabled = false;
+          setIncludeDisabled(false);
           isSpinning = false;
           if (doneCallback) {
             doneCallback();
