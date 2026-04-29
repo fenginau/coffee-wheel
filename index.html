@@ -185,6 +185,10 @@
         </label>
       </div>
     </div>
+    <audio id="attackThemeAudio" preload="auto">
+      <source src="aot.mp3" type="audio/mpeg">
+      <!-- <source src="attack-theme.wav" type="audio/wav"> -->
+    </audio>
   </div>
 
   <script>
@@ -201,6 +205,7 @@
       var result = document.getElementById("result");
       var optionAot = document.getElementById("optionAot");
       var optionWork = document.getElementById("optionWork");
+      var attackThemeAudio = document.getElementById("attackThemeAudio");
       var context = canvas.getContext("2d");
       var currentRotation = 0;
       var isSpinning = false;
@@ -305,6 +310,47 @@
         }
 
         audioUnlocked = true;
+      }
+
+      function playAttackThemeCue() {
+        if (!attackThemeAudio) {
+          return;
+        }
+
+        stopAttackTheme();
+
+        try {
+          attackThemeAudio.currentTime = 0;
+          attackThemeAudio.play();
+        } catch (error) {
+          return;
+        }
+
+        try {
+          attackThemeAudio._stopTimer = window.setTimeout(function () {
+            stopAttackTheme();
+          }, 5000);
+        } catch (error) {
+          return;
+        }
+      }
+
+      function stopAttackTheme() {
+        if (!attackThemeAudio) {
+          return;
+        }
+
+        if (attackThemeAudio._stopTimer) {
+          window.clearTimeout(attackThemeAudio._stopTimer);
+          attackThemeAudio._stopTimer = null;
+        }
+
+        try {
+          attackThemeAudio.pause();
+          attackThemeAudio.currentTime = 0;
+        } catch (error) {
+          return;
+        }
       }
 
       function getPointFromEvent(event) {
@@ -729,6 +775,11 @@
 
         window.setTimeout(function () {
           result.innerHTML = "Result: " + options[spinTarget.resultIndex];
+          if (options[spinTarget.resultIndex] === SPECIAL_AOT) {
+            playAttackThemeCue();
+          } else {
+            stopAttackTheme();
+          }
           drawButton.disabled = false;
           setIncludeDisabled(false);
           isSpinning = false;
