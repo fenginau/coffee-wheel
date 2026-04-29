@@ -25,6 +25,42 @@
       min-height: 100%;
       padding-top: 30px;
       padding-bottom: 30px;
+      overflow: hidden;
+    }
+
+    .main {
+      width: 100%;
+      position: relative;
+    }
+
+    .include-panel {
+      position: absolute;
+      top: 40px;
+      right: 40px;
+      width: 240px;
+      padding: 16px 18px;
+      border: 2px solid #d0bda2;
+      background: #f8f0e4;
+      text-align: left;
+    }
+
+    .include-title {
+      margin: 0 0 14px 0;
+      font-size: 26px;
+      font-weight: bold;
+    }
+
+    .include-option {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 22px;
+      line-height: 28px;
+      cursor: pointer;
+    }
+
+    .include-option input {
+      margin-right: 10px;
+      vertical-align: middle;
     }
 
     .wheel-wrap {
@@ -90,7 +126,21 @@
       font-weight: bold;
     }
 
+    .wheel-panel {
+      width: 100%;
+    }
+
     @media screen and (max-width: 420px) {
+      .main {
+        width: 100%;
+      }
+
+      .include-panel {
+        position: static;
+        width: 260px;
+        margin: 24px auto 0 auto;
+      }
+
       .wheel-wrap {
         width: 300px;
         height: 300px;
@@ -114,23 +164,42 @@
 </head>
 <body>
   <div class="page">
-    <div class="wheel-wrap">
-      <div class="pointer"></div>
-      <canvas id="wheel" width="340" height="340"></canvas>
-    </div>
+    <div class="main">
+      <div class="wheel-panel">
+        <div class="wheel-wrap">
+          <div class="pointer"></div>
+          <canvas id="wheel" width="340" height="340"></canvas>
+        </div>
 
-    <button class="draw-button" id="drawButton" type="button">Draw</button>
-    <div class="result" id="result"></div>
+        <button class="draw-button" id="drawButton" type="button">Draw</button>
+        <div class="result" id="result"></div>
+      </div>
+
+      <div class="include-panel">
+        <div class="include-title">Include</div>
+        <label class="include-option">
+          <input id="optionAot" type="checkbox">Attack on Titan
+        </label>
+        <label class="include-option">
+          <input id="optionWork" type="checkbox">Back to work
+        </label>
+      </div>
+    </div>
   </div>
 
   <script>
     (function () {
-      var options = ["Coffee", "Ice Cream", "Beer", "Tea"];
-      var colors = ["#7f5539", "#d9a441", "#4b7baf", "#4f8a5b"];
-      var segmentSize = 360 / options.length;
+      var SPECIAL_AOT = "Attack on Titan";
+      var SPECIAL_WORK = "Back to work";
+      var baseOptions = ["Coffee", "Ice Cream", "Beer", "Tea"];
+      var options = [];
+      var colors = ["#7f5539", "#d9a441", "#4b7baf", "#4f8a5b", "#7a4869", "#5e6b2f"];
+      var segmentSize = 90;
       var canvas = document.getElementById("wheel");
       var drawButton = document.getElementById("drawButton");
       var result = document.getElementById("result");
+      var optionAot = document.getElementById("optionAot");
+      var optionWork = document.getElementById("optionWork");
       var context = canvas.getContext("2d");
       var currentRotation = 0;
       var isSpinning = false;
@@ -219,6 +288,76 @@
         drawWheel();
       }
 
+      function isBypassOption(optionName) {
+        return optionName === SPECIAL_AOT || optionName === SPECIAL_WORK;
+      }
+
+      function getWrappedIndex(index) {
+        if (!options.length) {
+          return 0;
+        }
+        while (index < 0) {
+          index += options.length;
+        }
+        return index % options.length;
+      }
+
+      function getSectorIndexFromAngle(angle) {
+        return getWrappedIndex(Math.floor(normalizeAngle(angle + segmentSize / 2) / segmentSize));
+      }
+
+      function buildSpinTarget(requestedIndex) {
+        var resolvedIndex = requestedIndex;
+        var minAngle;
+        var maxAngle;
+        var targetAngle;
+        var bypassMinOffset = 1;
+        var bypassMaxOffset = 5;
+        var landedIndex;
+        var bypassBoundaryAngle;
+
+        if (isBypassOption(options[requestedIndex])) {
+          bypassBoundaryAngle = requestedIndex * segmentSize - segmentSize / 2;
+          targetAngle = normalizeAngle(
+            bypassBoundaryAngle - bypassMinOffset - Math.random() * (bypassMaxOffset - bypassMinOffset)
+          );
+          landedIndex = getSectorIndexFromAngle(targetAngle);
+          resolvedIndex = landedIndex;
+        } else {
+          minAngle = requestedIndex * segmentSize - segmentSize / 2 + 10;
+          maxAngle = requestedIndex * segmentSize + segmentSize / 2 - 10;
+          targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
+          resolvedIndex = requestedIndex;
+        }
+
+        return {
+          targetAngle: targetAngle,
+          resultIndex: resolvedIndex
+        };
+      }
+
+      function rebuildOptions() {
+        options = ["Coffee"];
+
+        if (optionAot.checked) {
+          options.push(SPECIAL_AOT);
+        }
+
+        options.push("Ice Cream", "Beer");
+
+        if (optionWork.checked) {
+          options.push(SPECIAL_WORK);
+        }
+
+        options.push("Tea");
+
+        segmentSize = 360 / options.length;
+        selectedIndex = null;
+        dragResultIndex = null;
+        result.innerHTML = "";
+        drawWheel();
+      }
+
       function drawWheel() {
         var size = canvas.width;
         var center = size / 2;
@@ -229,7 +368,7 @@
         context.clearRect(0, 0, size, size);
 
         for (i = 0; i < options.length; i += 1) {
-          var startAngle = (-90 - 45 + i * segmentSize) * Math.PI / 180;
+          var startAngle = (-90 - segmentSize / 2 + i * segmentSize) * Math.PI / 180;
           var endAngle = startAngle + segmentSize * Math.PI / 180;
           var centerAngle = startAngle + (endAngle - startAngle) / 2;
           var textX = center + Math.cos(centerAngle) * textRadius;
@@ -239,15 +378,15 @@
           context.moveTo(center, center);
           context.arc(center, center, radius, startAngle, endAngle, false);
           context.closePath();
-          context.fillStyle = colors[i];
+          context.fillStyle = colors[i % colors.length];
           context.fill();
 
           context.save();
           context.fillStyle = "#fffdf8";
-          context.font = (size <= 300 ? "bold 18px Arial" : "bold 20px Arial");
+          context.font = (size <= 300 ? "bold 16px Arial" : "bold 18px Arial");
           context.textAlign = "center";
           context.textBaseline = "middle";
-          wrapText(options[i], textX, textY, size <= 300 ? 84 : 96, 20);
+          wrapText(options[i], textX, textY, size <= 300 ? 76 : 88, size <= 300 ? 18 : 20);
           context.restore();
         }
 
@@ -340,9 +479,7 @@
       }
 
       function spinToSector(resultIndex, turnCount, doneCallback) {
-        var minAngle;
-        var maxAngle;
-        var targetAngle;
+        var spinTarget;
         var targetRotation;
         var normalizedRotation;
         var rotationDelta;
@@ -352,10 +489,8 @@
         drawButton.disabled = true;
         result.innerHTML = "";
 
-        minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
-        maxAngle = resultIndex * segmentSize + segmentSize / 2 - 10;
-        targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
-        targetRotation = normalizeAngle(360 - targetAngle);
+        spinTarget = buildSpinTarget(resultIndex);
+        targetRotation = normalizeAngle(360 - spinTarget.targetAngle);
         normalizedRotation = normalizeAngle(currentRotation);
         rotationDelta = turnCount * 360 + normalizeAngle(targetRotation - normalizedRotation);
 
@@ -363,7 +498,7 @@
         setWheelRotation(currentRotation);
 
         window.setTimeout(function () {
-          result.innerHTML = "Result: " + options[resultIndex];
+          result.innerHTML = "Result: " + options[spinTarget.resultIndex];
           drawButton.disabled = false;
           isSpinning = false;
           if (doneCallback) {
@@ -496,12 +631,19 @@
 
       drawButton.onclick = function () {
         var resultIndex;
+        var availableIndexes = [];
+        var i;
         if (isSpinning) {
           return;
         }
 
         if (selectedIndex === null) {
-          resultIndex = Math.floor(Math.random() * options.length);
+          for (i = 0; i < options.length; i += 1) {
+            if (!isBypassOption(options[i])) {
+              availableIndexes.push(i);
+            }
+          }
+          resultIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
         } else {
           resultIndex = selectedIndex;
         }
@@ -523,6 +665,15 @@
         document.onmouseup = endDrag;
       }
 
+      if (optionAot.addEventListener) {
+        optionAot.addEventListener("change", rebuildOptions, false);
+        optionWork.addEventListener("change", rebuildOptions, false);
+      } else {
+        optionAot.onchange = rebuildOptions;
+        optionWork.onchange = rebuildOptions;
+      }
+
+      rebuildOptions();
       resizeCanvas();
       setWheelRotation(0);
 
