@@ -477,9 +477,13 @@
           velocity = velocity * -1;
         }
 
+        if (velocity < 0.6) {
+          velocity = 0.6;
+        }
+
         spinToSector(
           dragResultIndex,
-          3 + Math.floor(Math.abs(velocity) / 3),
+          1 + Math.floor(Math.abs(velocity) / 12),
           function () {
             dragResultIndex = null;
           }
