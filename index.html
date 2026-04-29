@@ -137,6 +137,7 @@
       var selectedIndex = null;
       var isDragging = false;
       var dragMoved = false;
+      var dragResultIndex = null;
       var dragStartAngle = 0;
       var dragStartRotation = 0;
       var lastPointerAngle = 0;
@@ -338,22 +339,37 @@
         inertiaTimer = animationFrame(stepInertia);
       }
 
-      function startInertia(initialVelocity) {
-        if (initialVelocity > 24) {
-          initialVelocity = 24;
-        } else if (initialVelocity < -24) {
-          initialVelocity = -24;
-        }
+      function spinToSector(resultIndex, turnCount, doneCallback) {
+        var minAngle;
+        var maxAngle;
+        var targetAngle;
+        var targetRotation;
+        var normalizedRotation;
+        var rotationDelta;
 
-        if (initialVelocity > -0.2 && initialVelocity < 0.2) {
-          return;
-        }
-
-        stopInertia();
-        setWheelTransition(false);
-        inertiaVelocity = initialVelocity;
+        setWheelTransition(true);
         isSpinning = true;
-        inertiaTimer = animationFrame(stepInertia);
+        drawButton.disabled = true;
+        result.innerHTML = "";
+
+        minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
+        maxAngle = resultIndex * segmentSize + segmentSize / 2 - 10;
+        targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
+        targetRotation = normalizeAngle(360 - targetAngle);
+        normalizedRotation = normalizeAngle(currentRotation);
+        rotationDelta = turnCount * 360 + normalizeAngle(targetRotation - normalizedRotation);
+
+        currentRotation += rotationDelta;
+        setWheelRotation(currentRotation);
+
+        window.setTimeout(function () {
+          result.innerHTML = "Result: " + options[resultIndex];
+          drawButton.disabled = false;
+          isSpinning = false;
+          if (doneCallback) {
+            doneCallback();
+          }
+        }, 4800);
       }
 
       function beginDrag(event) {
@@ -364,7 +380,8 @@
         }
 
         point = getPointFromEvent(event);
-        if (getSectorIndexFromPoint(point.clientX, point.clientY) === null) {
+        dragResultIndex = getSectorIndexFromPoint(point.clientX, point.clientY);
+        if (dragResultIndex === null) {
           return;
         }
 
@@ -439,7 +456,9 @@
           index = getSectorIndexFromPoint(point.clientX, point.clientY);
           if (index !== null) {
             selectedIndex = index;
+            result.innerHTML = "";
           }
+          dragResultIndex = null;
           return;
         }
 
@@ -454,7 +473,17 @@
           }
         }
 
-        startInertia(velocity);
+        if (velocity < 0) {
+          velocity = velocity * -1;
+        }
+
+        spinToSector(
+          dragResultIndex,
+          3 + Math.floor(Math.abs(velocity) / 3),
+          function () {
+            dragResultIndex = null;
+          }
+        );
 
         if (event.preventDefault) {
           event.preventDefault();
@@ -463,22 +492,9 @@
 
       drawButton.onclick = function () {
         var resultIndex;
-        var extraSpins;
-        var minAngle;
-        var maxAngle;
-        var targetAngle;
-        var targetRotation;
-        var normalizedRotation;
-        var rotationDelta;
-
         if (isSpinning) {
           return;
         }
-
-        setWheelTransition(true);
-        isSpinning = true;
-        drawButton.disabled = true;
-        result.innerHTML = "";
 
         if (selectedIndex === null) {
           resultIndex = Math.floor(Math.random() * options.length);
@@ -486,23 +502,7 @@
           resultIndex = selectedIndex;
         }
         selectedIndex = null;
-
-        extraSpins = 5 * 360;
-        minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
-        maxAngle = resultIndex * segmentSize + segmentSize / 2 - 10;
-        targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
-        targetRotation = normalizeAngle(360 - targetAngle);
-        normalizedRotation = normalizeAngle(currentRotation);
-        rotationDelta = extraSpins + normalizeAngle(targetRotation - normalizedRotation);
-
-        currentRotation += rotationDelta;
-        setWheelRotation(currentRotation);
-
-        window.setTimeout(function () {
-          result.innerHTML = "Result: " + options[resultIndex];
-          drawButton.disabled = false;
-          isSpinning = false;
-        }, 4800);
+        spinToSector(resultIndex, 5);
       };
 
       if (canvas.addEventListener) {
