@@ -3,264 +3,318 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drink Wheel</title>
+  <title>Prize Wheel</title>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #f6efe3;
-      --panel: #fff8ef;
-      --text: #1f1d1a;
-      --accent: #b33a3a;
-      --accent-dark: #8e2424;
-      --shadow: rgba(69, 47, 20, 0.16);
-    }
-
-    * {
-      box-sizing: border-box;
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f2e6d5;
+      color: #1f1d1a;
     }
 
     body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background:
-        radial-gradient(circle at top, #fff7ea 0%, var(--bg) 52%, #ead8bc 100%);
-      font-family: Arial, Helvetica, sans-serif;
-      color: var(--text);
+      text-align: center;
     }
 
-    .layout {
-      width: min(92vw, 760px);
-      display: grid;
-      justify-items: center;
-      gap: 28px;
-      padding: 32px 16px;
-      scale: 1.5;
+    .page {
+      width: 100%;
+      min-height: 100%;
+      padding-top: 30px;
+      padding-bottom: 30px;
     }
 
     .wheel-wrap {
       position: relative;
-      width: min(72vw, 460px);
-      aspect-ratio: 1;
-      display: grid;
-      place-items: center;
+      width: 340px;
+      height: 340px;
+      margin: 0 auto;
     }
 
     .pointer {
       position: absolute;
-      top: -6px;
+      top: 0;
       left: 50%;
-      transform: translateX(-50%);
+      margin-left: -22px;
       width: 0;
       height: 0;
-      border-left: 24px solid transparent;
-      border-right: 24px solid transparent;
-      border-top: 0;
-      border-bottom: 42px solid var(--accent);
-      filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.18));
+      border-left: 22px solid transparent;
+      border-right: 22px solid transparent;
+      border-bottom: 40px solid #b33a3a;
       z-index: 2;
+      -webkit-transform: rotate(180deg);
+      transform: rotate(180deg);
     }
 
-    .wheel {
-      --label-radius: 126px;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      border: 14px solid #fff;
-      box-shadow:
-        0 24px 48px var(--shadow),
-        inset 0 0 0 8px rgba(255, 255, 255, 0.35);
-      background:
-        conic-gradient(
-          from -45deg,
-          #7f5539 0deg 90deg,
-          #d9a441 90deg 180deg,
-          #4b7baf 180deg 270deg,
-          #4f8a5b 270deg 360deg
-        );
-      position: relative;
+    #wheel {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      width: 340px;
+      height: 340px;
       cursor: pointer;
+      -webkit-transform: rotate(0deg);
+      transform: rotate(0deg);
+      -webkit-transition: -webkit-transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1);
       transition: transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1);
     }
 
-    .wheel::after {
-      content: "";
-      position: absolute;
-      inset: 50%;
-      width: 58px;
-      height: 58px;
-      transform: translate(-50%, -50%);
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #fff5df, #e5c898);
-      border: 6px solid #fff;
-      box-shadow: 0 8px 20px rgba(63, 41, 12, 0.2);
-    }
-
-    .label {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 28%;
-      text-align: center;
-      font-size: clamp(1.05rem, 1.9vw, 1.3rem);
-      font-weight: 700;
-      letter-spacing: 0;
-      line-height: 1.15;
-      color: #fffdf8;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
-      transform-origin: center center;
-      pointer-events: none;
-    }
-
-    .label-1 { transform: translate(25%, -150%) rotate(-45deg) translateY(calc(var(--label-radius) * -1)) rotate(45deg); }
-    .label-2 { transform: translate(50%, -50%) rotate(90deg) }
-    .label-3 { transform: translate(-150%, -50%) rotate(-90deg) }
-    .label-4 { transform: translate(25%, 50%) rotate(45deg) translateY(calc(var(--label-radius) * 1)) rotate(-225deg); }
-
     .draw-button {
-      min-width: min(70vw, 280px);
-      padding: 18px 28px;
+      display: inline-block;
+      width: 260px;
+      margin-top: 34px;
+      padding: 18px 0;
       border: 0;
-      border-radius: 16px;
-      background: linear-gradient(180deg, #d64b4b 0%, var(--accent-dark) 100%);
-      color: #fff;
-      font-size: clamp(1.25rem, 3vw, 1.6rem);
-      font-weight: 700;
+      border-radius: 12px;
+      background: #b33a3a;
+      color: #ffffff;
+      font-size: 32px;
+      font-weight: bold;
       cursor: pointer;
-      box-shadow: 0 14px 28px rgba(142, 36, 36, 0.28);
-      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
-    }
-
-    .draw-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 18px 34px rgba(142, 36, 36, 0.32);
-    }
-
-    .draw-button:active {
-      transform: translateY(1px);
     }
 
     .draw-button:disabled {
-      cursor: wait;
-      opacity: 0.82;
-      transform: none;
+      background: #9d7d7d;
+      cursor: default;
     }
 
     .result {
-      min-height: 1.6em;
-      font-size: clamp(1.2rem, 2.8vw, 1.5rem);
-      font-weight: 700;
+      min-height: 32px;
+      margin-top: 22px;
+      font-size: 28px;
+      font-weight: bold;
     }
 
-    @media (max-width: 560px) {
+    @media screen and (max-width: 420px) {
       .wheel-wrap {
-        width: min(84vw, 380px);
+        width: 300px;
+        height: 300px;
       }
 
-      .wheel {
-        --label-radius: 102px;
+      #wheel {
+        width: 300px;
+        height: 300px;
       }
 
-      .label {
-        width: 34%;
-        font-size: clamp(0.92rem, 3.6vw, 1.08rem);
+      .draw-button {
+        width: 220px;
+        font-size: 28px;
       }
 
+      .result {
+        font-size: 24px;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="layout">
+  <div class="page">
     <div class="wheel-wrap">
-      <div class="pointer" aria-hidden="true"></div>
-      <div class="wheel" id="wheel" aria-label="Prize wheel">
-        <div class="label label-1">Coffee</div>
-        <div class="label label-2">Ice Cream</div>
-        <div class="label label-3">Beer</div>
-        <div class="label label-4">No Drink</div>
-      </div>
+      <div class="pointer"></div>
+      <canvas id="wheel" width="340" height="340"></canvas>
     </div>
 
     <button class="draw-button" id="drawButton" type="button">Draw</button>
-    <div class="result" id="result" aria-live="polite"></div>
-  </main>
+    <div class="result" id="result"></div>
+  </div>
 
   <script>
-    const options = ["Coffee", "Ice Cream", "Beer", "No Drink"];
-    const segmentSize = 360 / options.length;
-    const wheel = document.getElementById("wheel");
-    const drawButton = document.getElementById("drawButton");
-    const result = document.getElementById("result");
+    (function () {
+      var options = ["Coffee", "Ice Cream", "Beer", "Tea"];
+      var colors = ["#7f5539", "#d9a441", "#4b7baf", "#4f8a5b"];
+      var segmentSize = 360 / options.length;
+      var canvas = document.getElementById("wheel");
+      var drawButton = document.getElementById("drawButton");
+      var result = document.getElementById("result");
+      var context = canvas.getContext("2d");
+      var currentRotation = 0;
+      var isSpinning = false;
+      var selectedIndex = null;
 
-    let currentRotation = 0;
-    let isSpinning = false;
-    let selectedIndex = null;
-
-    function normalizeAngle(angle) {
-      return ((angle % 360) + 360) % 360;
-    }
-
-    function getSectorIndexFromPoint(clientX, clientY) {
-      const rect = wheel.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const dx = clientX - centerX;
-      const dy = clientY - centerY;
-      const distance = Math.hypot(dx, dy);
-
-      if (distance > rect.width / 2) {
-        return null;
+      function normalizeAngle(angle) {
+        angle = angle % 360;
+        if (angle < 0) {
+          angle += 360;
+        }
+        return angle;
       }
 
-      const clickAngle = normalizeAngle((Math.atan2(dy, dx) * 180) / Math.PI + 90);
-      const wheelAngle = normalizeAngle(clickAngle - normalizeAngle(currentRotation));
-
-      return Math.floor(normalizeAngle(wheelAngle + segmentSize / 2) / segmentSize);
-    }
-
-    wheel.addEventListener("click", (event) => {
-      if (isSpinning) {
-        return;
+      function resizeCanvas() {
+        var size = 340;
+        if (window.innerWidth && window.innerWidth <= 420) {
+          size = 300;
+        }
+        canvas.width = size;
+        canvas.height = size;
+        canvas.style.width = size + "px";
+        canvas.style.height = size + "px";
+        drawWheel();
       }
 
-      const index = getSectorIndexFromPoint(event.clientX, event.clientY);
-      if (index !== null) {
-        selectedIndex = index;
+      function drawWheel() {
+        var size = canvas.width;
+        var center = size / 2;
+        var radius = center - 10;
+        var textRadius = radius * 0.58;
+        var i;
+
+        context.clearRect(0, 0, size, size);
+
+        for (i = 0; i < options.length; i += 1) {
+          var startAngle = (-90 - 45 + i * segmentSize) * Math.PI / 180;
+          var endAngle = startAngle + segmentSize * Math.PI / 180;
+          var centerAngle = startAngle + (endAngle - startAngle) / 2;
+          var textX = center + Math.cos(centerAngle) * textRadius;
+          var textY = center + Math.sin(centerAngle) * textRadius;
+
+          context.beginPath();
+          context.moveTo(center, center);
+          context.arc(center, center, radius, startAngle, endAngle, false);
+          context.closePath();
+          context.fillStyle = colors[i];
+          context.fill();
+
+          context.save();
+          context.fillStyle = "#fffdf8";
+          context.font = (size <= 300 ? "bold 18px Arial" : "bold 20px Arial");
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          wrapText(options[i], textX, textY, size <= 300 ? 84 : 96, 20);
+          context.restore();
+        }
+
+        context.beginPath();
+        context.arc(center, center, radius, 0, Math.PI * 2, false);
+        context.lineWidth = 10;
+        context.strokeStyle = "#ffffff";
+        context.stroke();
+
+        context.beginPath();
+        context.arc(center, center, 28, 0, Math.PI * 2, false);
+        context.fillStyle = "#ecd2a1";
+        context.fill();
+        context.lineWidth = 5;
+        context.strokeStyle = "#ffffff";
+        context.stroke();
       }
-    });
 
-    drawButton.addEventListener("click", () => {
-      if (isSpinning) {
-        return;
+      function wrapText(text, x, y, maxWidth, lineHeight) {
+        var words = text.split(" ");
+        var lines = [];
+        var currentLine = "";
+        var i;
+
+        for (i = 0; i < words.length; i += 1) {
+          var testLine = currentLine ? currentLine + " " + words[i] : words[i];
+          if (context.measureText(testLine).width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = words[i];
+          } else {
+            currentLine = testLine;
+          }
+        }
+
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+
+        var startY = y - ((lines.length - 1) * lineHeight) / 2;
+        for (i = 0; i < lines.length; i += 1) {
+          context.fillText(lines[i], x, startY + i * lineHeight);
+        }
       }
 
-      isSpinning = true;
-      drawButton.disabled = true;
-      result.textContent = "";
+      function getSectorIndexFromPoint(clientX, clientY) {
+        var rect = canvas.getBoundingClientRect();
+        var centerX = rect.left + rect.width / 2;
+        var centerY = rect.top + rect.height / 2;
+        var dx = clientX - centerX;
+        var dy = clientY - centerY;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        var radius = rect.width / 2;
+        var clickAngle;
+        var wheelAngle;
 
-      const resultIndex =
-        selectedIndex === null
-          ? Math.floor(Math.random() * options.length)
-          : selectedIndex;
-      const extraSpins = 5 * 360;
-      const minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
-      const maxAngle = resultIndex * segmentSize + segmentSize / 2 - 10;
-      const targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
-      const targetRotation = normalizeAngle(360 - targetAngle);
-      const normalizedRotation = normalizeAngle(currentRotation);
-      const rotationDelta =
-        extraSpins + normalizeAngle(targetRotation - normalizedRotation);
+        if (distance > radius) {
+          return null;
+        }
 
-      currentRotation += rotationDelta;
-      wheel.style.transform = `rotate(${currentRotation}deg)`;
+        clickAngle = normalizeAngle(Math.atan2(dy, dx) * 180 / Math.PI + 90);
+        wheelAngle = normalizeAngle(clickAngle - normalizeAngle(currentRotation));
 
-      window.setTimeout(() => {
-        result.textContent = `Result: ${options[resultIndex]}`;
-        drawButton.disabled = false;
-        isSpinning = false;
-      }, 4800);
-    });
+        return Math.floor(normalizeAngle(wheelAngle + segmentSize / 2) / segmentSize);
+      }
+
+      function setWheelRotation(angle) {
+        canvas.style.webkitTransform = "rotate(" + angle + "deg)";
+        canvas.style.transform = "rotate(" + angle + "deg)";
+      }
+
+      canvas.onclick = function (event) {
+        if (isSpinning) {
+          return;
+        }
+
+        var index = getSectorIndexFromPoint(event.clientX, event.clientY);
+        if (index !== null) {
+          selectedIndex = index;
+        }
+      };
+
+      drawButton.onclick = function () {
+        var resultIndex;
+        var extraSpins;
+        var minAngle;
+        var maxAngle;
+        var targetAngle;
+        var targetRotation;
+        var normalizedRotation;
+        var rotationDelta;
+
+        if (isSpinning) {
+          return;
+        }
+
+        isSpinning = true;
+        drawButton.disabled = true;
+        result.innerHTML = "";
+
+        if (selectedIndex === null) {
+          resultIndex = Math.floor(Math.random() * options.length);
+        } else {
+          resultIndex = selectedIndex;
+        }
+
+        extraSpins = 5 * 360;
+        minAngle = resultIndex * segmentSize - segmentSize / 2 + 10;
+        maxAngle = resultIndex * segmentSize + segmentSize / 2 - 10;
+        targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
+        targetRotation = normalizeAngle(360 - targetAngle);
+        normalizedRotation = normalizeAngle(currentRotation);
+        rotationDelta = extraSpins + normalizeAngle(targetRotation - normalizedRotation);
+
+        currentRotation += rotationDelta;
+        setWheelRotation(currentRotation);
+
+        window.setTimeout(function () {
+          result.innerHTML = "Result: " + options[resultIndex];
+          drawButton.disabled = false;
+          isSpinning = false;
+        }, 4800);
+      };
+
+      resizeCanvas();
+      setWheelRotation(0);
+
+      if (window.addEventListener) {
+        window.addEventListener("resize", resizeCanvas, false);
+      } else if (window.attachEvent) {
+        window.attachEvent("onresize", resizeCanvas);
+      }
+    }());
   </script>
 </body>
 </html>
