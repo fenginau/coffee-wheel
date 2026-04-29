@@ -306,7 +306,7 @@
         return getWrappedIndex(Math.floor(normalizeAngle(angle + segmentSize / 2) / segmentSize));
       }
 
-      function buildSpinTarget(requestedIndex) {
+      function buildSpinTarget(requestedIndex, spinDirection) {
         var resolvedIndex = requestedIndex;
         var minAngle;
         var maxAngle;
@@ -317,10 +317,17 @@
         var bypassBoundaryAngle;
 
         if (isBypassOption(options[requestedIndex])) {
-          bypassBoundaryAngle = requestedIndex * segmentSize - segmentSize / 2;
-          targetAngle = normalizeAngle(
-            bypassBoundaryAngle - bypassMinOffset - Math.random() * (bypassMaxOffset - bypassMinOffset)
-          );
+          if (spinDirection < 0) {
+            bypassBoundaryAngle = requestedIndex * segmentSize + segmentSize / 2;
+            targetAngle = normalizeAngle(
+              bypassBoundaryAngle + bypassMinOffset + Math.random() * (bypassMaxOffset - bypassMinOffset)
+            );
+          } else {
+            bypassBoundaryAngle = requestedIndex * segmentSize - segmentSize / 2;
+            targetAngle = normalizeAngle(
+              bypassBoundaryAngle - bypassMinOffset - Math.random() * (bypassMaxOffset - bypassMinOffset)
+            );
+          }
           landedIndex = getSectorIndexFromAngle(targetAngle);
           resolvedIndex = landedIndex;
         } else {
@@ -478,7 +485,7 @@
         inertiaTimer = animationFrame(stepInertia);
       }
 
-      function spinToSector(resultIndex, turnCount, doneCallback) {
+      function spinToSector(resultIndex, turnCount, spinDirection, doneCallback) {
         var spinTarget;
         var targetRotation;
         var normalizedRotation;
@@ -489,10 +496,14 @@
         drawButton.disabled = true;
         result.innerHTML = "";
 
-        spinTarget = buildSpinTarget(resultIndex);
+        spinTarget = buildSpinTarget(resultIndex, spinDirection);
         targetRotation = normalizeAngle(360 - spinTarget.targetAngle);
         normalizedRotation = normalizeAngle(currentRotation);
-        rotationDelta = turnCount * 360 + normalizeAngle(targetRotation - normalizedRotation);
+        if (spinDirection < 0) {
+          rotationDelta = -1 * (turnCount * 360 + normalizeAngle(normalizedRotation - targetRotation));
+        } else {
+          rotationDelta = turnCount * 360 + normalizeAngle(targetRotation - normalizedRotation);
+        }
 
         currentRotation += rotationDelta;
         setWheelRotation(currentRotation);
@@ -579,6 +590,7 @@
         var lastSample;
         var deltaAngle;
         var deltaTime;
+        var spinDirection;
 
         if (!isDragging) {
           return;
@@ -608,9 +620,8 @@
           }
         }
 
-        if (velocity < 0) {
-          velocity = velocity * -1;
-        }
+        spinDirection = velocity < 0 ? -1 : 1;
+        velocity = Math.abs(velocity);
 
         if (velocity < 0.6) {
           velocity = 0.6;
@@ -619,6 +630,7 @@
         spinToSector(
           dragResultIndex,
           1 + Math.floor(Math.abs(velocity) / 12),
+          spinDirection,
           function () {
             dragResultIndex = null;
           }
@@ -648,7 +660,7 @@
           resultIndex = selectedIndex;
         }
         selectedIndex = null;
-        spinToSector(resultIndex, 5);
+        spinToSector(resultIndex, 5, 1);
       };
 
       if (canvas.addEventListener) {
