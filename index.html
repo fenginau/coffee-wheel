@@ -212,7 +212,9 @@
       var isSpinning = false;
       var selectedIndex = null;
       var aotToggleCount = 0;
+      var workToggleCount = 0;
       var pendingAttackOnTitan = false;
+      var pendingBackToWorkFakeout = false;
       var isDragging = false;
       var dragMoved = false;
       var dragResultIndex = null;
@@ -382,10 +384,26 @@
         return delta;
       }
 
-      function setWheelTransition(enabled) {
+      function getDirectionalRotationDelta(fromRotation, toRotation, spinDirection) {
+        var normalizedFrom = normalizeAngle(fromRotation);
+        var normalizedTo = normalizeAngle(toRotation);
+
+        if (spinDirection < 0) {
+          return -1 * normalizeAngle(normalizedFrom - normalizedTo);
+        }
+
+        return normalizeAngle(normalizedTo - normalizedFrom);
+      }
+
+      function setWheelTransition(enabled, durationMs, easing) {
+        var durationSeconds;
+        var transitionCurve;
+
         if (enabled) {
-          canvas.style.webkitTransition = "-webkit-transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1)";
-          canvas.style.transition = "transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1)";
+          durationSeconds = (durationMs || 4800) / 1000;
+          transitionCurve = easing || "cubic-bezier(0.17, 0.67, 0.2, 1)";
+          canvas.style.webkitTransition = "-webkit-transform " + durationSeconds + "s " + transitionCurve;
+          canvas.style.transition = "transform " + durationSeconds + "s " + transitionCurve;
         } else {
           canvas.style.webkitTransition = "none";
           canvas.style.transition = "none";
@@ -915,6 +933,79 @@
         }, 4800);
       }
 
+      function spinBackToWorkFakeout(turnCount, spinDirection, doneCallback) {
+        var workIndex = options.indexOf(SPECIAL_WORK);
+        var workSector;
+        var entryBoundaryAngle;
+        var escapeBoundaryAngle;
+        var boundaryNudge = 2;
+        var recoilDistance = 2;
+        var entryAngle;
+        var escapeAngle;
+        var targetRotation;
+        var rotationDelta;
+        var reverseTargetRotation;
+        var reverseRotationDelta;
+        var finalIndex;
+
+        if (workIndex < 0) {
+          spinToSector(0, turnCount, 1, true, doneCallback);
+          return;
+        }
+
+        workSector = sectorLayout[workIndex];
+        if (spinDirection < 0) {
+          entryBoundaryAngle = workSector.start;
+          escapeBoundaryAngle = workSector.start;
+          entryAngle = normalizeAngle(entryBoundaryAngle + boundaryNudge);
+          escapeAngle = normalizeAngle(escapeBoundaryAngle - recoilDistance);
+        } else {
+          entryBoundaryAngle = workSector.end;
+          escapeBoundaryAngle = workSector.end;
+          entryAngle = normalizeAngle(entryBoundaryAngle - boundaryNudge);
+          escapeAngle = normalizeAngle(escapeBoundaryAngle + recoilDistance);
+        }
+        finalIndex = getSectorIndexFromAngle(escapeAngle);
+
+        setWheelTransition(true, 4800, "cubic-bezier(0.17, 0.67, 0.2, 1)");
+        isSpinning = true;
+        drawButton.disabled = true;
+        setIncludeDisabled(true);
+        result.innerHTML = "";
+        startTicking();
+
+        targetRotation = normalizeAngle(360 - entryAngle);
+        rotationDelta = spinDirection * turnCount * 360 +
+          getDirectionalRotationDelta(currentRotation, targetRotation, spinDirection);
+        currentRotation += rotationDelta;
+        setWheelRotation(currentRotation);
+
+        window.setTimeout(function () {
+          reverseTargetRotation = normalizeAngle(360 - escapeAngle);
+          reverseRotationDelta = getAngleDelta(reverseTargetRotation, currentRotation);
+
+          setWheelTransition(true, 6200, "cubic-bezier(0.12, 0.84, 0.18, 1)");
+          currentRotation += reverseRotationDelta;
+          setWheelRotation(currentRotation);
+
+          window.setTimeout(function () {
+            result.innerHTML = "Result: " + options[finalIndex];
+            if (options[finalIndex] === SPECIAL_AOT) {
+              playAttackThemeCue();
+            } else {
+              stopAttackTheme();
+            }
+            drawButton.disabled = false;
+            setIncludeDisabled(false);
+            isSpinning = false;
+            stopTicking();
+            if (doneCallback) {
+              doneCallback();
+            }
+          }, 6200);
+        }, 4800);
+      }
+
       function beginDrag(event) {
         var point;
 
@@ -1028,6 +1119,21 @@
           velocity = 0.6;
         }
 
+        if (pendingBackToWorkFakeout && optionWork.checked) {
+          pendingBackToWorkFakeout = false;
+          spinBackToWorkFakeout(
+            2 + Math.floor(Math.abs(velocity) / 12),
+            spinDirection,
+            function () {
+              dragResultIndex = null;
+            }
+          );
+          if (event.preventDefault) {
+            event.preventDefault();
+          }
+          return;
+        }
+
         if (pendingAttackOnTitan && optionAot.checked) {
           attackIndex = options.indexOf(SPECIAL_AOT);
           if (attackIndex >= 0) {
@@ -1067,6 +1173,11 @@
           resultIndex = attackIndex >= 0 ? attackIndex : 0;
           pendingAttackOnTitan = false;
           allowBypass = false;
+        } else if (pendingBackToWorkFakeout && optionWork.checked) {
+          pendingBackToWorkFakeout = false;
+          selectedIndex = null;
+          spinBackToWorkFakeout(5, 1);
+          return;
         } else if (selectedIndex === null) {
           for (i = 0; i < options.length; i += 1) {
             if (!isBypassOption(options[i])) {
@@ -1111,12 +1222,21 @@
         rebuildOptions();
       }
 
+      function handleWorkChange() {
+        workToggleCount += 1;
+        if (workToggleCount > 5) {
+          pendingBackToWorkFakeout = true;
+          workToggleCount = 0;
+        }
+        rebuildOptions();
+      }
+
       if (optionAot.addEventListener) {
         optionAot.addEventListener("change", handleAotChange, false);
-        optionWork.addEventListener("change", rebuildOptions, false);
+        optionWork.addEventListener("change", handleWorkChange, false);
       } else {
         optionAot.onchange = handleAotChange;
-        optionWork.onchange = rebuildOptions;
+        optionWork.onchange = handleWorkChange;
       }
 
       rebuildOptions();
