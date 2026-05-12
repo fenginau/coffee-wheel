@@ -199,6 +199,7 @@
       var options = [];
       var colors = ["#7f5539", "#d9a441", "#4b7baf", "#4f8a5b", "#7a4869", "#5e6b2f"];
       var segmentSize = 90;
+      var sectorLayout = [];
       var dotCount = 50;
       var canvas = document.getElementById("wheel");
       var drawButton = document.getElementById("drawButton");
@@ -422,8 +423,79 @@
         return index % options.length;
       }
 
+      function getSectorSizeAt(index) {
+        var workIndex;
+        var remainingOptions;
+
+        if (!options.length) {
+          return 0;
+        }
+
+        workIndex = options.indexOf(SPECIAL_WORK);
+        if (workIndex >= 0) {
+          if (index === workIndex) {
+            return 270;
+          }
+          remainingOptions = options.length - 1;
+          return remainingOptions > 0 ? 90 / remainingOptions : 90;
+        }
+
+        return 360 / options.length;
+      }
+
+      function rebuildSectorLayout() {
+        var cursor;
+        var i;
+        var size;
+        var start;
+        var end;
+
+        sectorLayout = [];
+        if (!options.length) {
+          segmentSize = 0;
+          return;
+        }
+
+        segmentSize = getSectorSizeAt(0);
+        cursor = -segmentSize / 2;
+
+        for (i = 0; i < options.length; i += 1) {
+          size = getSectorSizeAt(i);
+          start = cursor;
+          end = start + size;
+
+          sectorLayout.push({
+            start: normalizeAngle(start),
+            end: normalizeAngle(end),
+            center: normalizeAngle(start + size / 2),
+            size: size
+          });
+
+          cursor = end;
+        }
+      }
+
+      function angleIsWithinSector(angle, sector) {
+        angle = normalizeAngle(angle);
+
+        if (sector.start <= sector.end) {
+          return angle >= sector.start && angle < sector.end;
+        }
+
+        return angle >= sector.start || angle < sector.end;
+      }
+
       function getSectorIndexFromAngle(angle) {
-        return getWrappedIndex(Math.floor(normalizeAngle(angle + segmentSize / 2) / segmentSize));
+        var normalizedAngle = normalizeAngle(angle);
+        var i;
+
+        for (i = 0; i < sectorLayout.length; i += 1) {
+          if (angleIsWithinSector(normalizedAngle, sectorLayout[i])) {
+            return i;
+          }
+        }
+
+        return 0;
       }
 
       function getPointerDotAngle(rotationAngle) {
@@ -523,6 +595,7 @@
 
       function buildSpinTarget(requestedIndex, spinDirection, allowBypass) {
         var resolvedIndex = requestedIndex;
+        var sector = sectorLayout[requestedIndex];
         var minAngle;
         var maxAngle;
         var targetAngle;
@@ -530,15 +603,16 @@
         var bypassMaxOffset = 5;
         var landedIndex;
         var bypassBoundaryAngle;
+        var padding;
 
         if (allowBypass && isBypassOption(options[requestedIndex])) {
           if (spinDirection < 0) {
-            bypassBoundaryAngle = requestedIndex * segmentSize + segmentSize / 2;
+            bypassBoundaryAngle = sector.end;
             targetAngle = normalizeAngle(
               bypassBoundaryAngle + bypassMinOffset + Math.random() * (bypassMaxOffset - bypassMinOffset)
             );
           } else {
-            bypassBoundaryAngle = requestedIndex * segmentSize - segmentSize / 2;
+            bypassBoundaryAngle = sector.start;
             targetAngle = normalizeAngle(
               bypassBoundaryAngle - bypassMinOffset - Math.random() * (bypassMaxOffset - bypassMinOffset)
             );
@@ -546,9 +620,14 @@
           landedIndex = getSectorIndexFromAngle(targetAngle);
           resolvedIndex = landedIndex;
         } else {
-          minAngle = requestedIndex * segmentSize - segmentSize / 2 + 10;
-          maxAngle = requestedIndex * segmentSize + segmentSize / 2 - 10;
-          targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
+          padding = Math.min(10, Math.max(2, sector.size / 4));
+          minAngle = sector.start + padding;
+          maxAngle = sector.start + sector.size - padding;
+          if (maxAngle <= minAngle) {
+            targetAngle = sector.center;
+          } else {
+            targetAngle = minAngle + Math.random() * (maxAngle - minAngle);
+          }
           resolvedIndex = requestedIndex;
         }
 
@@ -573,7 +652,7 @@
 
         options.push("Tea");
 
-        segmentSize = 360 / options.length;
+        rebuildSectorLayout();
         selectedIndex = null;
         dragResultIndex = null;
         result.innerHTML = "";
@@ -590,9 +669,10 @@
         context.clearRect(0, 0, size, size);
 
         for (i = 0; i < options.length; i += 1) {
-          var startAngle = (-90 - segmentSize / 2 + i * segmentSize) * Math.PI / 180;
-          var endAngle = startAngle + segmentSize * Math.PI / 180;
-          var centerAngle = startAngle + (endAngle - startAngle) / 2;
+          var sector = sectorLayout[i];
+          var startAngle = (sector.start - 90) * Math.PI / 180;
+          var endAngle = (sector.start + sector.size - 90) * Math.PI / 180;
+          var centerAngle = (sector.center - 90) * Math.PI / 180;
           var textX = center + Math.cos(centerAngle) * textRadius;
           var textY = center + Math.sin(centerAngle) * textRadius;
 
@@ -603,13 +683,15 @@
           context.fillStyle = colors[i % colors.length];
           context.fill();
 
-          context.save();
-          context.fillStyle = "#fffdf8";
-          context.font = (size <= 300 ? "bold 16px Arial" : "bold 18px Arial");
-          context.textAlign = "center";
-          context.textBaseline = "middle";
-          wrapText(options[i], textX, textY, size <= 300 ? 76 : 88, size <= 300 ? 18 : 20);
-          context.restore();
+          drawSectorLabel(
+            options[i],
+            sector,
+            textX,
+            textY,
+            textRadius,
+            center,
+            size
+          );
         }
 
         context.beginPath();
@@ -637,6 +719,49 @@
         context.lineWidth = 5;
         context.strokeStyle = "#ffffff";
         context.stroke();
+      }
+
+      function drawSectorLabel(text, sector, textX, textY, textRadius, center, size) {
+        var isWorkLayout = options.indexOf(SPECIAL_WORK) >= 0;
+        var isNarrowSector = isWorkLayout && text !== SPECIAL_WORK;
+        var rotation;
+        var adjustedRadius;
+        var adjustedX;
+        var adjustedY;
+
+        context.save();
+        context.fillStyle = "#fffdf8";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        if (!isNarrowSector) {
+          context.font = (size <= 300 ? "bold 16px Arial" : "bold 18px Arial");
+          wrapText(text, textX, textY, size <= 300 ? 76 : 88, size <= 300 ? 18 : 20);
+          context.restore();
+          return;
+        }
+
+        rotation = sector.center - 90;
+        adjustedRadius = textRadius + radiusOffsetForNarrowLabel(size, text);
+        adjustedX = center + Math.cos(sector.center * Math.PI / 180 - Math.PI / 2) * adjustedRadius;
+        adjustedY = center + Math.sin(sector.center * Math.PI / 180 - Math.PI / 2) * adjustedRadius;
+
+        context.translate(adjustedX, adjustedY);
+        context.rotate(rotation * Math.PI / 180);
+        context.textAlign = "left";
+        context.font = size <= 300 ? "bold 12px Arial" : "bold 13px Arial";
+        context.fillText(text, 0, 0);
+        context.restore();
+      }
+
+      function radiusOffsetForNarrowLabel(size, text) {
+        if (text === SPECIAL_AOT) {
+          return size <= 300 ? -16 : -12;
+        }
+        if (text === "Ice Cream") {
+          return size <= 300 ? -20 : -18;
+        }
+        return size <= 300 ? -18 : -14;
       }
 
       function wrapText(text, x, y, maxWidth, lineHeight) {
@@ -683,7 +808,7 @@
         clickAngle = normalizeAngle(Math.atan2(dy, dx) * 180 / Math.PI + 90);
         wheelAngle = normalizeAngle(clickAngle - normalizeAngle(currentRotation));
 
-        return Math.floor(normalizeAngle(wheelAngle + segmentSize / 2) / segmentSize);
+        return getSectorIndexFromAngle(wheelAngle);
       }
 
       function setWheelRotation(angle) {
