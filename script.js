@@ -65,7 +65,7 @@
           options: [
             "Board game",
             "Coding",
-            "Shoot " + randomCoworker,
+            "Shoot " + randomCoworker + " (Nerf bullets only)",
             "Sing a song"
           ],
           bypassIndexes: [0],
