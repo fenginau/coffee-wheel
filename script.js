@@ -1395,16 +1395,17 @@
     var taskWheel;
     var currentEmployee = null;
     var currentTaskSpec = null;
+    var coffeeImagePool = [];
     var isEmployeeSpinning = false;
     var isTaskSpinning = false;
     var dualSpinInProgress = false;
     var dualSpinUsesInfiniteTask = false;
-    var coffeeRequestId = 0;
     var prefetchedCoffeeImageUrl = null;
     var pendingCoffeePopup = false;
     var ashPendingSpinPlan = null;
     var ashWaitingForCoffee = false;
     var ashSettlingSpin = false;
+    var suppressEmployeeResultTaskReset = false;
 
     if (
       !employeeCanvas ||
@@ -1456,8 +1457,8 @@
       coffeePopup.setAttribute("aria-hidden", "false");
     }
 
-    function storePrefetchedCoffeeImage(imageUrl, requestId) {
-      if (coffeeRequestId !== requestId || !imageUrl) {
+    function storePrefetchedCoffeeImage(imageUrl) {
+      if (!imageUrl) {
         return;
       }
 
@@ -1481,45 +1482,48 @@
       }
     }
 
-    function preloadCoffeeImageFallback(requestId) {
-      var imageUrl = "https://coffee.alexflipnote.dev/random";
-      var preloadImage = new Image();
+    function buildCoffeeImagePool() {
+      var imageList = [];
+      var i;
+      var label;
 
-      preloadImage.onload = function () {
-        storePrefetchedCoffeeImage(imageUrl, requestId);
-      };
-      preloadImage.onerror = function () {
-        return null;
-      };
-      preloadImage.src = imageUrl;
+      for (i = 1; i <= 30; i += 1) {
+        label = i < 10 ? "0" + i : String(i);
+        imageList.push("coffee/coffee-" + label + ".jpg");
+      }
+
+      return imageList;
     }
 
     function prefetchCoffeeImage() {
-      var requestId = coffeeRequestId + 1;
+      var imageUrl;
+      var preloadImage = new Image();
 
-      coffeeRequestId = requestId;
+      if (!coffeeImagePool.length) {
+        coffeeImagePool = buildCoffeeImagePool();
+      }
+
+      imageUrl = coffeeImagePool[Math.floor(Math.random() * coffeeImagePool.length)];
       prefetchedCoffeeImageUrl = null;
       pendingCoffeePopup = false;
 
-      if (!window.fetch) {
-        return;
-      }
-
-      window.fetch("https://coffee.alexflipnote.dev/random.json")
-        .then(function (response) {
-          if (!response.ok) {
-            throw new Error("Coffee request failed");
-          }
-          return response.json();
-        })
-        .then(function (data) {
-          var imageUrl = data && (data.file || data.url);
-
-          storePrefetchedCoffeeImage(imageUrl, requestId);
-        })
-        .catch(function () {
-          preloadCoffeeImageFallback(requestId);
-        });
+      preloadImage.onload = function () {
+        storePrefetchedCoffeeImage(imageUrl);
+      };
+      preloadImage.onerror = function () {
+        if (ashWaitingForCoffee) {
+          ashSettlingSpin = true;
+          ashWaitingForCoffee = false;
+          taskWheel.stopInfiniteSpin(true);
+          taskWheel.spinToSector(
+            ashPendingSpinPlan.requestedIndex,
+            ashPendingSpinPlan.turnCount,
+            ashPendingSpinPlan.spinDirection,
+            ashPendingSpinPlan.allowBypass
+          );
+        }
+      };
+      preloadImage.src = imageUrl;
     }
 
     function showPrefetchedCoffeePopup() {
@@ -1623,6 +1627,7 @@
       }
 
       dualSpinInProgress = true;
+      suppressEmployeeResultTaskReset = true;
       employeeIndex = getRandomIndex(EMPLOYEE_NAMES.length);
       employeeName = EMPLOYEE_NAMES[employeeIndex];
       taskSpec = buildTaskSpec(employeeName);
@@ -1791,6 +1796,10 @@
         taskWheel.setControlsLocked(false);
       },
       onResult: function (label) {
+        if (suppressEmployeeResultTaskReset) {
+          suppressEmployeeResultTaskReset = false;
+          return;
+        }
         if (dualSpinInProgress) {
           return;
         }
@@ -1799,6 +1808,14 @@
     });
 
     dualSpinButton.onclick = spinBothWheels;
+    if (dualSpinButton.addEventListener) {
+      dualSpinButton.addEventListener("touchend", function (event) {
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+        spinBothWheels();
+      }, false);
+    }
     coffeePopupClose.onclick = hideCoffeePopup;
     coffeePopup.onclick = function (event) {
       if (event.target === coffeePopup) {
