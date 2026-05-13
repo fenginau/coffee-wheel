@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Wheel</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #f4ead8 0%, #efe0ca 100%);
+      color: #241d18;
+    }
+
+    body {
+      text-align: center;
+    }
+
+    .nav-link {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 5;
+      display: inline-block;
+      padding: 10px 16px;
+      border: 2px solid #7f5539;
+      border-radius: 999px;
+      background: #fff9f1;
+      color: #7f5539;
+      font-size: 18px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .page {
+      min-height: 100%;
+      padding: 76px 24px 30px;
+      box-sizing: border-box;
+    }
+
+    .title {
+      margin: 0 0 8px;
+      font-size: 44px;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      margin: 0 0 28px;
+      font-size: 20px;
+      color: #5d5047;
+    }
+
+    .selected-employee {
+      margin: 0 0 26px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #7f5539;
+    }
+
+    .wheel-grid {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 36px;
+      flex-wrap: wrap;
+    }
+
+    .wheel-panel {
+      width: 360px;
+      max-width: 100%;
+      padding: 24px 18px 28px;
+      border: 2px solid #d5bfa7;
+      border-radius: 24px;
+      background: rgba(255, 248, 238, 0.88);
+      box-shadow: 0 18px 40px rgba(72, 45, 28, 0.08);
+    }
+
+    .wheel-title {
+      margin: 0 0 18px;
+      font-size: 30px;
+    }
+
+    .wheel-wrap {
+      position: relative;
+      width: 340px;
+      height: 340px;
+      margin: 0 auto;
+    }
+
+    .pointer {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      margin-left: -22px;
+      width: 0;
+      height: 0;
+      border-left: 22px solid transparent;
+      border-right: 22px solid transparent;
+      border-bottom: 40px solid #b33a3a;
+      z-index: 2;
+      transform: rotate(180deg);
+    }
+
+    .wheel-canvas {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      width: 340px;
+      height: 340px;
+      cursor: pointer;
+      user-select: none;
+      transform: rotate(0deg);
+      transition: transform 4.8s cubic-bezier(0.17, 0.67, 0.2, 1);
+    }
+
+    .draw-button {
+      display: inline-block;
+      width: 240px;
+      margin-top: 60px;
+      padding: 16px 0;
+      border: 0;
+      border-radius: 12px;
+      background: #7f5539;
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .draw-button:disabled {
+      background: #b69d89;
+      cursor: default;
+    }
+
+    .result {
+      min-height: 56px;
+      margin-top: 18px;
+      font-size: 24px;
+      font-weight: bold;
+      line-height: 1.35;
+    }
+
+    @media screen and (max-width: 900px) {
+      .wheel-panel {
+        width: 320px;
+      }
+
+      .wheel-wrap {
+        width: 300px;
+        height: 300px;
+      }
+
+      .wheel-canvas {
+        width: 300px;
+        height: 300px;
+      }
+    }
+
+    @media screen and (max-width: 480px) {
+      .page {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .title {
+        font-size: 34px;
+      }
+
+      .subtitle {
+        font-size: 18px;
+      }
+
+      .selected-employee {
+        font-size: 21px;
+      }
+
+      .wheel-panel {
+        width: 100%;
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .draw-button {
+        width: 220px;
+        font-size: 26px;
+      }
+
+      .result {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="nav-link" href="index.html">Coffee Wheel</a>
+  <div class="page">
+    <h1 class="title">Task Wheel</h1>
+    <p class="subtitle">Spin the left wheel for a person, then spin the right wheel for their daily adventure.</p>
+    <div class="selected-employee" id="selectedEmployeeLabel">Task pool: Default</div>
+
+    <div class="wheel-grid">
+      <div class="wheel-panel">
+        <h2 class="wheel-title">Employees</h2>
+        <div class="wheel-wrap">
+          <div class="pointer"></div>
+          <canvas class="wheel-canvas" id="employeeWheel" width="340" height="340"></canvas>
+        </div>
+        <button class="draw-button" id="employeeDrawButton" type="button">Spin Employee</button>
+        <div class="result" id="employeeResult"></div>
+      </div>
+
+      <div class="wheel-panel">
+        <h2 class="wheel-title">Tasks</h2>
+        <div class="wheel-wrap">
+          <div class="pointer"></div>
+          <canvas class="wheel-canvas" id="taskWheel" width="340" height="340"></canvas>
+        </div>
+        <button class="draw-button" id="taskDrawButton" type="button">Spin Task</button>
+        <div class="result" id="taskResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
