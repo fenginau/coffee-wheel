@@ -78,8 +78,8 @@
       case "Josh":
         return {
           options: [
-            "Juggle 1 ball",
-            "Juggle 2 balls",
+            "Juggle with Mak's duck",
+            "Juggle with Jay's mug",
             "Juggle 3 balls",
             "Juggle 4 balls with the Poke Ball"
           ]
@@ -1385,24 +1385,278 @@
     var employeeResult = document.getElementById("employeeResult");
     var taskCanvas = document.getElementById("taskWheel");
     var taskButton = document.getElementById("taskDrawButton");
+    var dualSpinButton = document.getElementById("dualSpinButton");
     var taskResult = document.getElementById("taskResult");
     var selectedEmployeeLabel = document.getElementById("selectedEmployeeLabel");
+    var coffeePopup = document.getElementById("coffeePopup");
+    var coffeePopupImage = document.getElementById("coffeePopupImage");
+    var coffeePopupClose = document.getElementById("coffeePopupClose");
     var employeeWheel;
     var taskWheel;
     var currentEmployee = null;
     var currentTaskSpec = null;
+    var isEmployeeSpinning = false;
+    var isTaskSpinning = false;
+    var dualSpinInProgress = false;
+    var dualSpinUsesInfiniteTask = false;
+    var coffeeRequestId = 0;
+    var prefetchedCoffeeImageUrl = null;
+    var pendingCoffeePopup = false;
+    var ashPendingSpinPlan = null;
+    var ashWaitingForCoffee = false;
+    var ashSettlingSpin = false;
 
-    if (!employeeCanvas || !employeeButton || !employeeResult || !taskCanvas || !taskButton || !taskResult) {
+    if (
+      !employeeCanvas ||
+      !employeeButton ||
+      !employeeResult ||
+      !taskCanvas ||
+      !taskButton ||
+      !dualSpinButton ||
+      !taskResult ||
+      !coffeePopup ||
+      !coffeePopupImage ||
+      !coffeePopupClose
+    ) {
       return;
     }
 
-    function applyTaskSpec(employeeName) {
+    function updateDualSpinButtonState() {
+      if (dualSpinInProgress && dualSpinUsesInfiniteTask) {
+        dualSpinButton.disabled = isEmployeeSpinning;
+        return;
+      }
+      dualSpinButton.disabled = isEmployeeSpinning || isTaskSpinning;
+    }
+
+    function finishDualSpinIfComplete() {
+      if (
+        dualSpinInProgress &&
+        (
+          (!dualSpinUsesInfiniteTask && !isEmployeeSpinning && !isTaskSpinning) ||
+          (dualSpinUsesInfiniteTask && !isEmployeeSpinning)
+        )
+      ) {
+        dualSpinInProgress = false;
+        dualSpinUsesInfiniteTask = false;
+      }
+      updateDualSpinButtonState();
+    }
+
+    function hideCoffeePopup() {
+      pendingCoffeePopup = false;
+      coffeePopup.className = "coffee-popup";
+      coffeePopup.setAttribute("aria-hidden", "true");
+      coffeePopupImage.removeAttribute("src");
+    }
+
+    function showCoffeePopup(imageUrl) {
+      coffeePopupImage.src = imageUrl;
+      coffeePopup.className = "coffee-popup is-visible";
+      coffeePopup.setAttribute("aria-hidden", "false");
+    }
+
+    function storePrefetchedCoffeeImage(imageUrl, requestId) {
+      if (coffeeRequestId !== requestId || !imageUrl) {
+        return;
+      }
+
+      prefetchedCoffeeImageUrl = imageUrl;
+      if (ashWaitingForCoffee && currentEmployee === "Ash" && ashPendingSpinPlan) {
+        ashSettlingSpin = true;
+        ashWaitingForCoffee = false;
+        taskWheel.stopInfiniteSpin(true);
+        taskWheel.spinToSector(
+          ashPendingSpinPlan.requestedIndex,
+          ashPendingSpinPlan.turnCount,
+          ashPendingSpinPlan.spinDirection,
+          ashPendingSpinPlan.allowBypass
+        );
+        return;
+      }
+
+      if (pendingCoffeePopup && currentEmployee === "Ash") {
+        showCoffeePopup(imageUrl);
+        pendingCoffeePopup = false;
+      }
+    }
+
+    function preloadCoffeeImageFallback(requestId) {
+      var imageUrl = "https://coffee.alexflipnote.dev/random";
+      var preloadImage = new Image();
+
+      preloadImage.onload = function () {
+        storePrefetchedCoffeeImage(imageUrl, requestId);
+      };
+      preloadImage.onerror = function () {
+        return null;
+      };
+      preloadImage.src = imageUrl;
+    }
+
+    function prefetchCoffeeImage() {
+      var requestId = coffeeRequestId + 1;
+
+      coffeeRequestId = requestId;
+      prefetchedCoffeeImageUrl = null;
+      pendingCoffeePopup = false;
+
+      if (!window.fetch) {
+        return;
+      }
+
+      window.fetch("https://coffee.alexflipnote.dev/random.json")
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("Coffee request failed");
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          var imageUrl = data && (data.file || data.url);
+
+          storePrefetchedCoffeeImage(imageUrl, requestId);
+        })
+        .catch(function () {
+          preloadCoffeeImageFallback(requestId);
+        });
+    }
+
+    function showPrefetchedCoffeePopup() {
+      if (prefetchedCoffeeImageUrl) {
+        showCoffeePopup(prefetchedCoffeeImageUrl);
+        pendingCoffeePopup = false;
+        return;
+      }
+      pendingCoffeePopup = true;
+    }
+
+    function beginAshCoffeeSpin(spinPlan) {
+      ashPendingSpinPlan = {
+        requestedIndex: spinPlan.requestedIndex,
+        turnCount: spinPlan.turnCount || 5,
+        spinDirection: spinPlan.spinDirection || 1,
+        allowBypass: spinPlan.allowBypass !== false
+      };
+      ashWaitingForCoffee = true;
+      ashSettlingSpin = false;
+      prefetchedCoffeeImageUrl = null;
+      pendingCoffeePopup = false;
+    }
+
+    function applyTaskSpec(employeeName, taskSpec) {
       currentEmployee = employeeName;
-      currentTaskSpec = buildTaskSpec(employeeName);
+      currentTaskSpec = taskSpec || buildTaskSpec(employeeName);
       taskWheel.resetPosition();
       taskWheel.setOptions(currentTaskSpec.options);
+      if (!currentTaskSpec.meltOnSpin) {
+        taskWheel.setDisplayTextMapper(null);
+      }
       taskWheel.setResultText("");
       selectedEmployeeLabel.innerHTML = "Task pool: " + employeeName;
+    }
+
+    function getRandomIndex(optionCount, excludedIndexes) {
+      var availableIndexes = [];
+      var i;
+
+      for (i = 0; i < optionCount; i += 1) {
+        if (!excludedIndexes || excludedIndexes.indexOf(i) < 0) {
+          availableIndexes.push(i);
+        }
+      }
+
+      if (!availableIndexes.length) {
+        for (i = 0; i < optionCount; i += 1) {
+          availableIndexes.push(i);
+        }
+      }
+
+      return availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+    }
+
+    function resolveTaskSpinPlan(taskSpec) {
+      var bypassIndexes = taskSpec.bypassIndexes || [];
+
+      if (taskSpec.infiniteSpin) {
+        return {
+          requestedIndex: 0,
+          spinDirection: 1,
+          mode: "infinite"
+        };
+      }
+
+      if (taskSpec.forceIndex !== undefined && taskSpec.forceIndex !== null) {
+        return {
+          requestedIndex: taskSpec.forceIndex,
+          turnCount: 5,
+          spinDirection: 1,
+          allowBypass: false
+        };
+      }
+
+      if (taskSpec.randomOnly) {
+        return {
+          requestedIndex: getRandomIndex(taskSpec.options.length),
+          turnCount: 5,
+          spinDirection: 1,
+          allowBypass: false
+        };
+      }
+
+      return {
+        requestedIndex: getRandomIndex(taskSpec.options.length, bypassIndexes),
+        turnCount: 5,
+        spinDirection: 1,
+        allowBypass: true
+      };
+    }
+
+    function spinBothWheels() {
+      var employeeIndex;
+      var employeeName;
+      var taskSpec;
+      var taskSpinPlan;
+
+      if (isEmployeeSpinning || isTaskSpinning) {
+        return;
+      }
+
+      dualSpinInProgress = true;
+      employeeIndex = getRandomIndex(EMPLOYEE_NAMES.length);
+      employeeName = EMPLOYEE_NAMES[employeeIndex];
+      taskSpec = buildTaskSpec(employeeName);
+      taskSpinPlan = resolveTaskSpinPlan(taskSpec);
+      dualSpinUsesInfiniteTask = taskSpinPlan.mode === "infinite";
+
+      applyTaskSpec(employeeName, taskSpec);
+      employeeWheel.resetSelection();
+      taskWheel.resetSelection();
+      employeeWheel.spinToSector(employeeIndex, 5, 1, true);
+
+      if (employeeName === "Ash") {
+        beginAshCoffeeSpin(taskSpinPlan);
+        taskWheel.setSelectedIndex(taskSpinPlan.requestedIndex);
+        taskWheel.spinSelectedOrRandom(5, taskSpinPlan.spinDirection || 1, taskSpinPlan.allowBypass);
+        return;
+      }
+
+      if (taskSpinPlan.mode === "infinite") {
+        if (typeof taskWheel.setSelectedIndex === "function") {
+          taskWheel.setSelectedIndex(taskSpinPlan.requestedIndex);
+        }
+        taskWheel.setControlsLocked(true);
+        taskWheel.stopInfiniteSpin(true);
+        taskWheel.spinSelectedOrRandom(5, taskSpinPlan.spinDirection || 1, false);
+        return;
+      }
+
+      taskWheel.spinToSector(
+        taskSpinPlan.requestedIndex,
+        taskSpinPlan.turnCount,
+        taskSpinPlan.spinDirection,
+        taskSpinPlan.allowBypass
+      );
     }
 
     taskWheel = createWheelController({
@@ -1440,6 +1694,25 @@
           return spinPlan;
         }
 
+        if (currentEmployee === "Ash") {
+          if (!ashWaitingForCoffee && !ashSettlingSpin) {
+            beginAshCoffeeSpin({
+              requestedIndex: getRandomIndex(currentTaskSpec.options.length),
+              turnCount: spinPlan.turnCount || 5,
+              spinDirection: spinPlan.spinDirection || 1,
+              allowBypass: false
+            });
+          }
+
+          if (ashWaitingForCoffee) {
+            return {
+              requestedIndex: ashPendingSpinPlan ? ashPendingSpinPlan.requestedIndex : 0,
+              spinDirection: spinPlan.spinDirection,
+              mode: "infinite"
+            };
+          }
+        }
+
         if (currentTaskSpec.infiniteSpin) {
           return {
             requestedIndex: 0,
@@ -1466,14 +1739,28 @@
         return spinPlan;
       },
       onSpinStart: function () {
+        isTaskSpinning = true;
+        updateDualSpinButtonState();
         if (currentTaskSpec && currentTaskSpec.meltOnSpin) {
           taskWheel.setDisplayTextMapper(function () {
             return "Melted";
           });
         }
+        if (currentEmployee === "Ash" && ashWaitingForCoffee) {
+          prefetchCoffeeImage();
+        }
       },
       onSpinEnd: function () {
-        taskWheel.setDisplayTextMapper(null);
+        isTaskSpinning = false;
+        finishDualSpinIfComplete();
+        if (!currentTaskSpec || !currentTaskSpec.meltOnSpin) {
+          taskWheel.setDisplayTextMapper(null);
+        }
+        if (currentEmployee === "Ash" && ashSettlingSpin) {
+          ashSettlingSpin = false;
+          ashPendingSpinPlan = null;
+          showPrefetchedCoffeePopup();
+        }
       }
     });
 
@@ -1494,18 +1781,40 @@
         };
       },
       onSpinStart: function () {
+        isEmployeeSpinning = true;
+        updateDualSpinButtonState();
         taskWheel.setControlsLocked(true);
       },
       onSpinEnd: function () {
+        isEmployeeSpinning = false;
+        finishDualSpinIfComplete();
         taskWheel.setControlsLocked(false);
       },
       onResult: function (label) {
+        if (dualSpinInProgress) {
+          return;
+        }
         applyTaskSpec(label);
       }
     });
 
+    dualSpinButton.onclick = spinBothWheels;
+    coffeePopupClose.onclick = hideCoffeePopup;
+    coffeePopup.onclick = function (event) {
+      if (event.target === coffeePopup) {
+        hideCoffeePopup();
+      }
+    };
+    if (document.addEventListener) {
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && coffeePopup.className.indexOf("is-visible") >= 0) {
+          hideCoffeePopup();
+        }
+      }, false);
+    }
     employeeWheel.setOptions(EMPLOYEE_NAMES);
     applyTaskSpec("Steve W");
+    updateDualSpinButtonState();
   }
 
   initCoffeeWheelPage();
